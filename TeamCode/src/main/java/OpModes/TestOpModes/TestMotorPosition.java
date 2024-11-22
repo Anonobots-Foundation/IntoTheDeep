@@ -38,7 +38,7 @@ public class TestMotorPosition extends Robot {
             currentMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             currentMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         }
-        //set power to game controll left stick
+        //set power to game controller left stick
         currentMotor.setPower(gameController1.left_stick_y);
         telemetry.addData("Current Motor",currentMotorName);
         telemetry.addData("Motor Position",currentMotor.getCurrentPosition());
