@@ -11,17 +11,25 @@ import com.qualcomm.robotcore.hardware.Servo;
 
 
 import Drivers.GoBildaPinpointDriver;
+import Subsystems.DeliveryManager;
 import Subsystems.DriveTrainManager;
 import Subsystems.IntakeManager;
 import Utilities.GameController;
 import Utilities.Timer;
 
 public abstract class Robot extends OpMode {
+    public enum AllianceColor {
+        RED,
+        BLUE
+    }
+
     //region public properties
     public Timer opModeTimer;
 
     public GameController gameController1;
     public GameController gameController2;
+
+    public static AllianceColor alliance;
 
     //motors
     public DcMotorEx frontLeftMotor;
@@ -49,6 +57,7 @@ public abstract class Robot extends OpMode {
 
     public DriveTrainManager driveTrainManager;
     public IntakeManager intakeManager;
+    public DeliveryManager deliveryManager;
     //endregion
 
     //region private properties
@@ -59,6 +68,8 @@ public abstract class Robot extends OpMode {
         lastLoopTimestamp = System.currentTimeMillis();
         opModeTimer = new Timer();
 
+        if(alliance == null)
+            alliance = AllianceColor.RED;
         //declare all game controllers
         gameController1 = new GameController();
         gameController2 = new GameController();
@@ -72,26 +83,40 @@ public abstract class Robot extends OpMode {
         frontRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         backRightMotor.setDirection(DcMotorSimple.Direction.REVERSE);
 
+        rearDrivetrainDistanceSensor = hardwareMap.get(Rev2mDistanceSensor.class,"RearDistanceSensor");
         //set up odometry
-        pinpointOdometry = hardwareMap.get(GoBildaPinpointDriver.class,"PinpointOdometry");
+        //pinpointOdometry = hardwareMap.get(GoBildaPinpointDriver.class,"PinpointOdometry");
         //TODO: configure odometry
 
         //Intake Components
+
         intakeExtensionMotor = hardwareMap.get(DcMotorEx.class,"IntakeExtensionMotor");
         intakeExtensionMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        intakeExtensionMotor.setDirection(DcMotorSimple.Direction.REVERSE);
         intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         intakeGrabberServo = hardwareMap.get(Servo.class,"IntakeGrabberServo");
         intakeDeploymentServo = hardwareMap.get(Servo.class,"IntakeDeploymentServo");
         intakeRotationServo = hardwareMap.get(Servo.class,"IntakeRotationServo");
-        intakeObjectDetectionSensor = hardwareMap.get(RevColorSensorV3.class,"IntakeObjectDetectionServo");
+        intakeObjectDetectionSensor = hardwareMap.get(RevColorSensorV3.class,"IntakeObjectDetectionSensor");
 
+        //delivery components
+        deliveryLiftMotor = hardwareMap.get(DcMotorEx.class,"DeliveryLiftMotor");
+        deliveryLiftMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        deliveryLiftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
+        deliveryGrabberServo = hardwareMap.get(Servo.class, "DeliveryGrabberServo");
+        deliveryBucketDeploymentServo = hardwareMap.get(Servo.class, "DeliveryBucketDeploymentServo");
+        deliveryBucketGateServo = hardwareMap.get(Servo.class,"DeliveryBucketGateServo");
 
+        //hanging
+        hangingMotor = hardwareMap.get(DcMotorEx.class, "HangingMotor");
+        hangingRatchetServo = hardwareMap.get(Servo.class,"HangingRatchetServo");
 
         //create subsystem manager classes
         driveTrainManager = new DriveTrainManager(this);
         intakeManager = new IntakeManager(this);
+        deliveryManager = new DeliveryManager(this);
 
     }
 
@@ -115,7 +140,8 @@ public abstract class Robot extends OpMode {
         handleButtonInputs();
 
         driveTrainManager.update();
-        intakeManager.update();
+        //intakeManager.update();
+        //deliveryManager.update();
     }
 
     //region private methods
