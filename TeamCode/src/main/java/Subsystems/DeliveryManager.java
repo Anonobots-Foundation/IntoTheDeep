@@ -1,5 +1,7 @@
 package Subsystems;
 
+import static Subsystems.IntakeManager.IntakeExtensionState.HOME;
+
 import com.qualcomm.robotcore.hardware.DcMotor;
 
 import OpModes.Robot;
@@ -14,7 +16,8 @@ public class DeliveryManager {
         LOW_BASKET,
         HIGH_BASKET,
         LAST_BASKET,
-        LAST_CHAMBER
+        LAST_CHAMBER,
+        LEVEL_1_CLIMB
     }
 
     public enum DeliveryState {
@@ -50,20 +53,21 @@ public class DeliveryManager {
     private final int deliveryDropPosition = 0;
     private final int deliveryLowChamberPosition = 600;
     private final int deliveryHighChamberPosition = 1100;
-    private final int deliveryLowBasketPosition = 700;
-    private final int deliveryHighBasketPosition = 1200;
+    private final int level1ClimbPosition = 500;
+    private  int deliveryLowBasketPosition = 700;
+    private  int deliveryHighBasketPosition = 1200;
     private final int deliveryMinBucketDeploymentScoringHeight = 0;
     private final int deliveryMinBucketDeploymentDumpHeight = 0;
 
-    private final double bucketHomePosition = 0.3;
+    private final double bucketHomePosition = 0.28;
     private final double bucketScorePosition = 0.79;
     private final double bucketDumpPosition = 0.18;
 
-    private final double grabberOpenPosition = 0.52;
-    private final double grabberClosedPosition = 0.567;
+    private final double grabberOpenPosition = 0.53;
+    private final double grabberClosedPosition = 0.66;
 
-    private final double bucketGateOpenPosition = 0.56;
-    private final double bucketGateClosedPosition = 0.89;
+    private final double bucketGateOpenPosition = 0.29;
+    private final double bucketGateClosedPosition = 0.55;
 
     private final int bucketDeployMs = 1000;
     private final int bucketGateMs = 200;
@@ -89,22 +93,33 @@ public class DeliveryManager {
     public DeliveryManager(Robot robot) {
         //assign the global robot to the local property to access in this class
         this.robot = robot;
+        closeBucketGate();
 
     }
 
-    public void update() {
+    public void moveToHome() {
+        moveBucket(BucketState.HOME);
+        closeBucketGate();
+        openGrabber();
+        moveDeliveryToPosition(DeliveryPositions.HOME);
 
-        switch (deliveryState) {
-            case MOVING:
-                handleMovement();
-                break;
-            default:
-                break;
-        }
+    }
+    public void update() {
+        //these will set initial states if they are not already set
+        if(deliveryState == null)
+            deliveryState = DeliveryState.HOME;
+        if(bucketState == null)
+            moveBucket(BucketState.HOME);
+        if(bucketGateState == null)
+            closeBucketGate();
+        if(deliveryState == DeliveryState.MOVING)
+            handleMovement();
+
 
         if(bucketState == BucketState.MOVING && bucketTimer.elapsedTime() >= bucketDeployMs) {
             bucketState = targetBucketState;
             bucketTimer = null;
+
         }
         if(grabberState == GrabberState.MOVING && grabberTimer.elapsedTime() >= grabberMs){
             if(robot.deliveryGrabberServo.getPosition() == grabberOpenPosition)
@@ -120,6 +135,8 @@ public class DeliveryManager {
                 bucketGateState = BucketGateState.CLOSED;
             bucketGateTimer = null;
         }
+
+
     }
 
     public void toggleBasketAndHome() {
@@ -142,6 +159,10 @@ public class DeliveryManager {
         if(position == DeliveryPositions.LOW_CHAMBER || position == DeliveryPositions.HIGH_CHAMBER)
             lastChamberPosition = position;
         targetDeliveryPosition = position;
+        if(position == DeliveryPositions.HOME) {
+            openGrabber();
+            closeBucketGate();
+        }
         liftMovementStarted = false;
         deliveryState = DeliveryState.MOVING;
 
@@ -164,7 +185,12 @@ public class DeliveryManager {
         grabberTimer.start();
         grabberState = GrabberState.MOVING;
     }
-
+    public void toggleBucketGate() {
+        if(bucketGateState == BucketGateState.CLOSED)
+            openBucketGate();
+        else
+            closeBucketGate();
+    }
     public void openBucketGate() {
         robot.deliveryBucketGateServo.setPosition(bucketGateOpenPosition);
         bucketGateTimer = new Timer();
@@ -172,16 +198,16 @@ public class DeliveryManager {
         bucketGateState = BucketGateState.MOVING;
     }
     public void closeBucketGate() {
-        robot.deliveryGrabberServo.setPosition(grabberClosedPosition);
-        grabberTimer = new Timer();
-        grabberTimer.start();
-        grabberState = GrabberState.MOVING;
+        robot.deliveryBucketGateServo.setPosition(bucketGateClosedPosition);
+        bucketGateTimer = new Timer();
+        bucketGateTimer.start();
+        bucketGateState = BucketGateState.MOVING;
     }
-    private void moveDeliveryToPosition(int targetPosition) {
-        robot.deliveryLiftMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        robot.deliveryLiftMotor.setTargetPositionTolerance(10);
+    private void moveDeliveryToPosition(int targetPosition, double power) {
         robot.deliveryLiftMotor.setTargetPosition(targetPosition);
-        robot.deliveryLiftMotor.setPower(1);
+        robot.deliveryLiftMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+
+        robot.deliveryLiftMotor.setPower(power);
 
     }
 
@@ -201,12 +227,12 @@ public class DeliveryManager {
                     int targetPosition = deliveryHighChamberPosition;
                     if(targetDeliveryPosition == DeliveryPositions.LOW_CHAMBER)
                         targetPosition = deliveryLowChamberPosition;
-                    moveDeliveryToPosition(targetPosition);
+                    moveDeliveryToPosition(targetPosition, 1.0);
                     liftMovementStarted = true;
                 }
                 else {
                     //we are in position
-                    if(Math.abs( robot.deliveryLiftMotor.getTargetPosition() - currentPosition) <= robot.deliveryLiftMotor.getTargetPositionTolerance()) {
+                    if(Math.abs( robot.deliveryLiftMotor.getTargetPosition() - currentPosition) <= 30) {
                         deliveryState = DeliveryState.READY_TO_SCORE;
                         liftMovementStarted = false;
                     }
@@ -214,50 +240,54 @@ public class DeliveryManager {
                 break;
             case LOW_BASKET:
             case HIGH_BASKET:
-            case DROP_SAMPLE:
-                if(!liftMovementStarted) {
+
                     int targetPosition = deliveryHighBasketPosition;
                     if(targetDeliveryPosition == DeliveryPositions.LOW_BASKET)
                         targetPosition = deliveryLowBasketPosition;
-                    else if( targetDeliveryPosition == DeliveryPositions.DROP_SAMPLE)
-                        targetPosition = deliveryDropPosition;
-                    moveDeliveryToPosition(targetPosition);
-                    liftMovementStarted = true;
-                }
-                else {
-                    //we are in position
-                    if(Math.abs( robot.deliveryLiftMotor.getTargetPosition() - currentPosition) <= robot.deliveryLiftMotor.getTargetPositionTolerance()) {
+                    moveBucket(BucketState.HIGH);
+                    moveDeliveryToPosition(targetPosition, 1.0);
+
+               if(Math.abs( robot.deliveryLiftMotor.getTargetPosition() - currentPosition) <= robot.deliveryLiftMotor.getTargetPositionTolerance()) {
                         deliveryState = DeliveryState.READY_TO_SCORE;
-                        if(targetDeliveryPosition == DeliveryPositions.DROP_SAMPLE) {
-                            deliveryState = DeliveryState.READY_TO_DROP;
-                            moveBucket(BucketState.LOW);
-                        }
-                        liftMovementStarted = false;
-                    }
+
+
+
                 }
-                if(bucketTimer == null &&targetDeliveryPosition != DeliveryPositions.DROP_SAMPLE) {
+                if(bucketTimer == null ) {
                     if( currentPosition >= deliveryMinBucketDeploymentScoringHeight) {
                         moveBucket(BucketState.HIGH);
+
                     }
                 }
                 break;
-
+            case DROP_SAMPLE:
+                deliveryState = DeliveryState.READY_TO_DROP;
+                moveBucket(BucketState.LOW);
+                break;
+            case LEVEL_1_CLIMB:
+                moveBucket(BucketState.HOME);
+                moveDeliveryToPosition(level1ClimbPosition, 1.0);
+                break;
             case HOME:
-                if(bucketState != BucketState.HOME && bucketState != BucketState.MOVING)
+                if(bucketState != BucketState.HOME ){
                     moveBucket(BucketState.HOME);
-                if(bucketState == BucketState.HOME) {
-                    moveDeliveryToPosition(DeliveryPositions.HOME);
-                    liftMovementStarted = true;
-                }
-                //we are in position
-                if(Math.abs( robot.deliveryLiftMotor.getTargetPosition() - currentPosition) <= robot.deliveryLiftMotor.getTargetPositionTolerance()) {
-                    deliveryState = DeliveryState.HOME;
+                    bucketState = BucketState.HOME;
                     liftMovementStarted = false;
                 }
-                break;
+                else {
+                    moveDeliveryToPosition(deliveryHomePosition, 0.5);
+                    deliveryState = DeliveryState.HOME;
+                }
+            break;
 
 
         }
+    }
+    public void adjustDeliveryHeight(int adjustment) {
+        deliveryLowBasketPosition += adjustment;
+        deliveryHighBasketPosition += adjustment;
+        int currentPosition = robot.deliveryLiftMotor.getTargetPosition();
+        moveDeliveryToPosition(currentPosition += adjustment, 1.0);
     }
     private void moveBucket(BucketState targetBucketState) {
         double targetBucketPosition;

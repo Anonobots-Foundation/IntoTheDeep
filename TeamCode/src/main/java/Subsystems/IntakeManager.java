@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 
 import OpModes.Robot;
+import Utilities.MathUtilities;
 import Utilities.Timer;
 
 public class IntakeManager {
@@ -36,25 +37,26 @@ public class IntakeManager {
     }
     private Robot robot;
 
-    private final int extensionMaxPosition = 1800;
+    private final int extensionMaxPosition = 1400;
     private final int extensionHomePosition = 0;
     private final int extensionAutoLeftPosition = 500;
     private final int extensionAutoMiddlePosition = 500;
     private final int extensionAutoRightPosition = 500;
-    private final double deploymentServoIntakePosition = 0.73;
-    private final double deploymentServoRestingPosition = 0.25;
-    private final double intakeRotationServoIntakePosition = 0.15;
+    private  double deploymentServoIntakePosition = 0.76;
+    private final double deploymentServoRestingPosition = 0.3;
+    private final double intakeRotationServoIntakePosition = 0.25;
     private final double intakeRotationServoRestingPosition = 0.65;
     private final double grabbingServoClosedPosition = 0.30;
     private final double grabbingServoOpenPosition = 0.47;
 
     private final int deploymentTimeMs = 1000;
     private final int grabberTimerMs = 300;
-
+    private final int foundObjectMs = 1000;
     private Timer deploymentTimer;
     private Timer grabberTimer;
+    private Timer foundObjectTimer;
     private boolean autoSampleRetracting = false;
-
+    private double targetPower = 0;
     public IntakeExtensionState intakeState;
     public IntakeDeploymentState deploymentState;
     public IntakeGrabberState grabberState;
@@ -62,17 +64,24 @@ public class IntakeManager {
     public IntakeManager(Robot robot) {
         //assign the global robot to the local property to access in this class
         this.robot = robot;
+
         intakeState = IntakeExtensionState.HOME;
     }
-
+    public void moveToHome() {
+        moveIntakeToPosition(IntakeExtensionPositions.HOME);
+        retractIntake();
+    }
     public void update() {
+
         double currentExtensionPosition = robot.intakeExtensionMotor.getCurrentPosition();
         if(autoSampleRetracting) {
             if(grabberState == IntakeGrabberState.CLOSED) {
-                if(deploymentState == IntakeDeploymentState.READY) {
+                if(deploymentState != IntakeDeploymentState.RETRACTING) {
                     retractIntake();
                 }
-                if(deploymentState == IntakeDeploymentState.RETRACTING && deploymentTimer.elapsedTime()/2 > deploymentTimeMs) {
+                if(deploymentState == IntakeDeploymentState.HOME ||
+                        (deploymentState == IntakeDeploymentState.RETRACTING &&
+                                deploymentTimer.elapsedTime()/2 > deploymentTimeMs)) {
                     //begin retracting extension
                     moveIntakeToPosition(IntakeExtensionPositions.HOME);
                 }
@@ -80,9 +89,15 @@ public class IntakeManager {
             if(intakeState == IntakeExtensionState.HOME)
                 autoSampleRetracting = false;
         }
+        if(intakeState == null)
+            intakeState = IntakeExtensionState.HOME;
+        if(grabberState == null)
+            openGrabber();
+        if(deploymentState == null)
+            retractIntake();
         switch (intakeState) {
             case MOVING_TO_POSITION:
-                if(Math.abs( currentExtensionPosition - robot.intakeExtensionMotor.getTargetPosition()) <= robot.intakeExtensionMotor.getTargetPositionTolerance()) {
+                if(Math.abs(currentExtensionPosition- robot.intakeExtensionMotor.getTargetPosition()) <= 20) {
                     if(robot.intakeExtensionMotor.getTargetPosition() == extensionHomePosition)
                         intakeState = IntakeExtensionState.HOME;
                     else
@@ -90,10 +105,33 @@ public class IntakeManager {
                 }
                 break;
             case HOME:
-                //TODO: add check to see if delivery manager is in a home state
-                if(deploymentState == IntakeDeploymentState.HOME) {
+
+                if(deploymentState == IntakeDeploymentState.HOME &&
+                        robot.deliveryManager.deliveryState == DeliveryManager.DeliveryState.HOME) {
                     openGrabber();
                 }
+                break;
+            case MOVING:
+                double power =0;
+                robot.intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+                robot.intakeExtensionMotor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+                //if(targetPower < 0.4 && targetPower > -0.4)
+                //    power = 0;
+                power = targetPower;
+                double currentPos = robot.intakeExtensionMotor.getCurrentPosition();
+                if((power > 0 && currentPos >= extensionMaxPosition) ||
+                        (power < 0 && currentPos <= extensionHomePosition)) {
+                    power = 0;
+                }
+
+                robot.intakeExtensionMotor.setPower(power);
+                if (currentPos <= 10 && intakeState == IntakeExtensionState.MOVING) {
+                    robot.intakeExtensionMotor.setPower(0);
+                    intakeState = IntakeExtensionState.HOME;
+                } else if (targetPower == 0) {
+                    intakeState = IntakeExtensionState.STOPPED;
+                } else
+                    intakeState = IntakeExtensionState.MOVING;
                 break;
             default:
                 break;
@@ -118,13 +156,15 @@ public class IntakeManager {
             default:
                 break;
         }
-        //TODO: add check to see if delivery manager is in a home state
+
         if(intakeState == IntakeExtensionState.HOME &&
-            deploymentState == IntakeDeploymentState.HOME) {
+            deploymentState == IntakeDeploymentState.HOME &&
+            robot.deliveryManager.bucketState == DeliveryManager.BucketState.HOME) {
             openGrabber();
         }
         if(deploymentState == IntakeDeploymentState.READY) {
             boolean foundSample = false;
+
             if(robot.intakeObjectDetectionSensor.getDistance(DistanceUnit.INCH) < 2.0) {
                 int b = robot.intakeObjectDetectionSensor.blue();
                 int r = robot.intakeObjectDetectionSensor.red();
@@ -148,29 +188,30 @@ public class IntakeManager {
                 }
             }
             if(foundSample) {
-                closeGrabber();
-                autoSampleRetracting = true;
+                if(foundObjectTimer == null) {
+                    foundObjectTimer = new Timer();
+                    foundObjectTimer.start();
+                }
+                if(foundObjectTimer != null && foundObjectTimer.elapsedTime() > foundObjectMs) {
+                    foundObjectTimer = null;
+                    closeGrabber();
+                    autoSampleRetracting = true;
+                }
             }
         }
 
-
+        targetPower = 0;
     }
 
     public void moveIntakeExtension(double power) {
-        robot.intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        double currentPos = robot.intakeExtensionMotor.getCurrentPosition();
-        if((power > 0 && currentPos >= extensionMaxPosition) ||
-            power < 0 && currentPos <= extensionHomePosition) {
-            robot.intakeExtensionMotor.setPower(0);
-        }
-        robot.intakeExtensionMotor.setPower(power);
-        if(power == 0) {
-            intakeState = IntakeExtensionState.STOPPED;
-        }
-        else
-         intakeState = IntakeExtensionState.MOVING;
+        targetPower = power;
+        intakeState = IntakeExtensionState.MOVING;
     }
 
+    public void adjustDeploymentHeight(double adjustment) {
+        deploymentServoIntakePosition += adjustment;
+        robot.intakeDeploymentServo.setPosition(deploymentServoIntakePosition);
+    }
 
     public void moveIntakeToPosition(IntakeExtensionPositions position) {
         int targetPosition = 0;
@@ -229,9 +270,8 @@ public class IntakeManager {
             openGrabber();
     }
     private void moveExtensionToPosition(int targetPosition) {
-        robot.intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-        robot.intakeExtensionMotor.setTargetPositionTolerance(10);
         robot.intakeExtensionMotor.setTargetPosition(targetPosition);
+        robot.intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         robot.intakeExtensionMotor.setPower(1);
 
     }

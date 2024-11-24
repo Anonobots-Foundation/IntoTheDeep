@@ -123,7 +123,8 @@ public abstract class Robot extends OpMode {
     public void init_loop() {
         setLoopTimestamp();
         handleButtonInputs();
-
+        telemetry.addData("Alliance Color", Robot.alliance);
+        telemetry.addData("extension", intakeExtensionMotor.getCurrentPosition());
         /*
         telemetry.addData("Robot X", RobotPosition.currentX);
         telemetry.addData("Robot Y", RobotPosition.currentY);
@@ -140,8 +141,10 @@ public abstract class Robot extends OpMode {
         handleButtonInputs();
 
         driveTrainManager.update();
-        //intakeManager.update();
-        //deliveryManager.update();
+        intakeManager.update();
+        deliveryManager.update();
+
+        telemetry.addData("Alliance Color", Robot.alliance);
     }
 
     //region private methods

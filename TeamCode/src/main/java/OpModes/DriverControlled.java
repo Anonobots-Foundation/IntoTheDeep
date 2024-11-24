@@ -1,6 +1,7 @@
 package OpModes;
 
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
 
 import Commands.Command;
 import Subsystems.DeliveryManager;
@@ -12,16 +13,27 @@ public class DriverControlled extends Robot{
     Command runningCommand;
     public void init() {
         super.init();
+
     }
 
     public void init_loop() {
         super.init_loop();
+        telemetry.addLine("LB+RB to zero motors. This is only for testing");
+        if(gameController1.left_bumper && gameController1.right_bumper) {
+            intakeExtensionMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            intakeExtensionMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+
+            deliveryLiftMotor.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            deliveryLiftMotor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        }
+
+
     }
 
     public void start() {
         super.start();
-        deliveryManager.moveDeliveryToPosition(DeliveryManager.DeliveryPositions.HOME);
-        intakeManager.moveIntakeToPosition(IntakeManager.IntakeExtensionPositions.HOME);
+        intakeManager.moveToHome();
+        deliveryManager.moveToHome();
     }
     public void loop() {
         super.loop();
@@ -63,13 +75,20 @@ public class DriverControlled extends Robot{
             else if(gameController1.dpad_right)
                 deliveryManager.moveDeliveryToPosition(DeliveryManager.DeliveryPositions.HIGH_BASKET);
             else if(gameController1.right_bumper)
-                deliveryManager.openBucketGate();
+                deliveryManager.toggleBucketGate();
+            else if(gameController1.dpad_down)
+                deliveryManager.adjustDeliveryHeight(-50);
+            else if(gameController1.dpad_up)
+                deliveryManager.adjustDeliveryHeight(50);
             else
                 deliveryManager.toggleBasketAndHome();
         }
         if(gameController1.startPressed)
             deliveryManager.moveDeliveryToPosition(DeliveryManager.DeliveryPositions.DROP_SAMPLE);
+        if(gameController1.aPressed)
+            deliveryManager.moveDeliveryToPosition(DeliveryManager.DeliveryPositions.LEVEL_1_CLIMB);
         //DELIVERY CHAMBER
+        /*
         if(gameController1.bPressed) {
             if(gameController1.dpad_left)
                 deliveryManager.moveDeliveryToPosition(DeliveryManager.DeliveryPositions.LOW_CHAMBER);
@@ -83,7 +102,18 @@ public class DriverControlled extends Robot{
                 deliveryManager.toggleChamberAndHome();
         }
 
-
+         */
+        if(gameController1.xPressed) {
+            double adjustment = 0;
+            if(gameController1.dpad_up) {
+                adjustment = 0.01;
+            }
+            else if(gameController1.dpad_down) {
+                adjustment = -0.01;
+                intakeManager.adjustDeploymentHeight(adjustment);
+            }
+        }
+        telemetry.addData("Extension Pos", intakeExtensionMotor.getCurrentPosition());
     }
 
     private void applyMovement(double powerMultiple) {
