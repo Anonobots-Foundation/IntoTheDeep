@@ -49,7 +49,7 @@ public abstract class Robot extends OpMode {
     public Servo hangingRatchetServo;
 
     //sensors
-    public GoBildaPinpointDriver pinpointOdometry;
+
     public RevColorSensorV3 intakeObjectDetectionSensor;
     public Rev2mDistanceSensor rearDrivetrainDistanceSensor;
 
@@ -59,7 +59,7 @@ public abstract class Robot extends OpMode {
     public IntakeManager intakeManager;
     public DeliveryManager deliveryManager;
     //endregion
-
+    public String sampleInView = "None";
     //region private properties
     private long lastLoopTimestamp;
     //endregion
@@ -145,6 +145,7 @@ public abstract class Robot extends OpMode {
         deliveryManager.update();
 
         telemetry.addData("Alliance Color", Robot.alliance);
+        telemetry.addData("Sample", sampleInView);
     }
 
     //region private methods

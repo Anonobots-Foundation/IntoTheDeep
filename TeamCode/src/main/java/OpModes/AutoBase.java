@@ -4,9 +4,16 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 
 import org.firstinspires.ftc.robotcore.external.hardware.camera.CameraName;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
 
 
+import java.util.Locale;
+
+import Drivers.GoBildaPinpointDriver;
 import Utilities.Location;
+import Utilities.RobotPosition;
 
 
 public abstract class AutoBase extends Robot {
@@ -17,18 +24,18 @@ public abstract class AutoBase extends Robot {
     public Location redLocation;
     public Location blueLocation;
 
-
+    public GoBildaPinpointDriver odo;
+    public Pose2D pos;
 
 
 
     public void init() {
         super.init();
         Robot.alliance = AllianceColor.RED;
+        odo = hardwareMap.get(GoBildaPinpointDriver.class,"Odometry");
+        odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+        odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.REVERSED, GoBildaPinpointDriver.EncoderDirection.REVERSED);
 
-        //Set robot zero position on init
-        //updateFieldLocationPoints();
-        //RobotPosition.initialize(startingLocation);
-        //setRobotLocation(startingLocation);
     }
 //test
     public void init_loop() {
@@ -48,6 +55,14 @@ public abstract class AutoBase extends Robot {
             startingStackSize = Enumerations.StartingStackSize.FOUR; */
         //buildPaths();
         telemetry.addLine("Pres A to Toggle Alliance");
+        telemetry.addLine("Press B to reset IMU");
+        if(gameController1.bPressed)
+            odo.resetPosAndIMU();
+
+        telemetry.addData("Odo Status", "Initialized");
+        telemetry.addData("X offset", odo.getXOffset());
+        telemetry.addData("Y offset", odo.getYOffset());
+        telemetry.update();
 
     }
 
@@ -59,8 +74,24 @@ public abstract class AutoBase extends Robot {
 
     public void loop() {
         super.loop();
+        odo.bulkUpdate();
         timeRemaining = 30 - opModeTimer.elapsedTime() / 1000;
         telemetry.addData("Active Auto Step", getCurrentStep());
+         pos = odo.getPosition();
+        RobotPosition.currentX = pos.getY(DistanceUnit.INCH);
+        RobotPosition.currentY = pos.getX(DistanceUnit.INCH);
+        double myAngle = pos.getHeading(AngleUnit.DEGREES);
+        if(myAngle <= 0)
+            myAngle = -myAngle;
+        else
+            myAngle = 360-myAngle;
+        RobotPosition.currentHeading = myAngle;
+        String data = String.format(Locale.US, "{X: %.3f, Y: %.3f, H: %.3f}", pos.getX(DistanceUnit.INCH), pos.getY(DistanceUnit.INCH), pos.getHeading(AngleUnit.DEGREES));
+        telemetry.addData("Position", data);
+        telemetry.addData("RobotX",RobotPosition.currentX);
+        telemetry.addData("RobotY",RobotPosition.currentY);
+        telemetry.addData("RobotHeading",RobotPosition.currentHeading);
+
     }
 
     public void stop() {
@@ -83,4 +114,6 @@ public abstract class AutoBase extends Robot {
     }
 
     public abstract String getCurrentStep();
+
+    public abstract void BuildPaths();
 }

@@ -63,6 +63,15 @@ public class DriverControlled extends Robot{
                 intakeManager.retractIntake();
             else if(gameController1.left_bumper)
                 intakeManager.toggleGrabber();
+            else if(gameController1.dpad_up)
+                intakeManager.adjustDeploymentHeight(0.01);
+            else if(gameController1.dpad_down)
+                intakeManager.adjustDeploymentHeight(-0.01);
+            else if(gameController1.dpad_right)
+                intakeManager.adjustRotation(-0.01);
+            else if(gameController1.dpad_left)
+                intakeManager.adjustRotation(0.01);
+
             else
                 intakeManager.deployIntake();
         }
@@ -103,16 +112,7 @@ public class DriverControlled extends Robot{
         }
 
          */
-        if(gameController1.xPressed) {
-            double adjustment = 0;
-            if(gameController1.dpad_up) {
-                adjustment = 0.01;
-            }
-            else if(gameController1.dpad_down) {
-                adjustment = -0.01;
-                intakeManager.adjustDeploymentHeight(adjustment);
-            }
-        }
+
         telemetry.addData("Extension Pos", intakeExtensionMotor.getCurrentPosition());
     }
 

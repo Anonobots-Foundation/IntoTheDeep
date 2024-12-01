@@ -43,8 +43,8 @@ public class IntakeManager {
     private final int extensionAutoMiddlePosition = 500;
     private final int extensionAutoRightPosition = 500;
     private  double deploymentServoIntakePosition = 0.76;
-    private final double deploymentServoRestingPosition = 0.3;
-    private final double intakeRotationServoIntakePosition = 0.25;
+    private final double deploymentServoRestingPosition = 0.30;
+    private double intakeRotationServoIntakePosition = 0.35;
     private final double intakeRotationServoRestingPosition = 0.65;
     private final double grabbingServoClosedPosition = 0.30;
     private final double grabbingServoOpenPosition = 0.47;
@@ -173,20 +173,27 @@ public class IntakeManager {
                 if(r > 100 || b > 200) {
                     if (b > r && b > g) {
                         //found blue
+                        robot.sampleInView = "Blue";
                         if(Robot.alliance == Robot.AllianceColor.BLUE)
                             foundSample = true;
                     }
-                    else if( g > r)
+                    else if( g > r) {
                         //neutral sample
+                        robot.sampleInView = "Yellow";
                         foundSample = true;
+
+                    }
                     else
                     {
                         //found red
+                        robot.sampleInView = "Red";
                         if(Robot.alliance == Robot.AllianceColor.RED)
                             foundSample = true;
                     }
                 }
             }
+            else
+                robot.sampleInView = "None";
             if(foundSample) {
                 if(foundObjectTimer == null) {
                     foundObjectTimer = new Timer();
@@ -194,8 +201,8 @@ public class IntakeManager {
                 }
                 if(foundObjectTimer != null && foundObjectTimer.elapsedTime() > foundObjectMs) {
                     foundObjectTimer = null;
-                    closeGrabber();
-                    autoSampleRetracting = true;
+                    //closeGrabber();
+                    //autoSampleRetracting = true;
                 }
             }
         }
@@ -211,6 +218,10 @@ public class IntakeManager {
     public void adjustDeploymentHeight(double adjustment) {
         deploymentServoIntakePosition += adjustment;
         robot.intakeDeploymentServo.setPosition(deploymentServoIntakePosition);
+    }
+    public void adjustRotation(double adjustment) {
+        intakeRotationServoIntakePosition += adjustment;
+        robot.intakeRotationServo.setPosition(intakeRotationServoIntakePosition);
     }
 
     public void moveIntakeToPosition(IntakeExtensionPositions position) {

@@ -76,6 +76,7 @@ public class DeliveryManager {
     private Timer bucketTimer;
     private Timer grabberTimer;
     private Timer bucketGateTimer;
+    private Timer intakeDeploymentTimer;
 
     private boolean liftMovementStarted = false;
 
@@ -101,10 +102,17 @@ public class DeliveryManager {
         moveBucket(BucketState.HOME);
         closeBucketGate();
         openGrabber();
+        robot.intakeManager.deployIntake();
+        intakeDeploymentTimer = new Timer();
+        intakeDeploymentTimer.start();
         moveDeliveryToPosition(DeliveryPositions.HOME);
 
     }
     public void update() {
+        if(intakeDeploymentTimer != null && intakeDeploymentTimer.elapsedTime() > 1000) {
+            robot.intakeManager.retractIntake();
+            intakeDeploymentTimer = null;
+        }
         //these will set initial states if they are not already set
         if(deliveryState == null)
             deliveryState = DeliveryState.HOME;
